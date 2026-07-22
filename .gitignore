@@ -1,0 +1,10 @@
+/build/
+/.cache/
+/*.exe
+*.dll
+*.a
+*.o
+*.obj
+*.user
+*.sln
+*.vcxproj*
