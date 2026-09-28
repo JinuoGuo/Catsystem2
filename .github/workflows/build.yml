@@ -1,0 +1,35 @@
+name: Build CatSystem2 Tools
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install MinGW and CMake
+        shell: powershell
+        run: |
+          choco install mingw -y
+          cmake --version
+          g++ --version
+
+      - name: Configure
+        shell: powershell
+        run: |
+          cmake --preset mingw-release
+
+      - name: Build
+        shell: powershell
+        run: |
+          cmake --build --preset mingw-release -j
+
+      - name: Upload HG3 tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: catsystem2-hg3
+          path: build/release/catsystem2-hg3.exe
