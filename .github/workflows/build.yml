@@ -8,28 +8,121 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      # 1. 下载源码
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install MinGW and CMake
+      # 2. 安装 MinGW-w64
+      - name: Install MinGW-w64
         shell: powershell
         run: |
           choco install mingw -y
-          cmake --version
-          g++ --version
 
+          refreshenv
+
+          gcc --version
+          g++ --version
+          cmake --version
+
+      # 3. 配置 CMake
       - name: Configure
         shell: powershell
         run: |
           cmake --preset mingw-release
 
-      - name: Build
+      # 4. 编译全部工具
+      - name: Build all CatSystem2 tools
         shell: powershell
         run: |
           cmake --build --preset mingw-release -j
 
-      - name: Upload HG3 tool
+      # 5. 显示编译结果
+      - name: List build output
+        shell: powershell
+        run: |
+          Write-Host "=== Build directory ==="
+          Get-ChildItem -Recurse build
+
+          Write-Host "=== Release directory ==="
+          Get-ChildItem build/release
+
+      # 6. 创建发布目录
+      - name: Prepare release package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+
+          # 复制所有 EXE
+          Copy-Item build/release/*.exe release/ -Force
+
+      # 7. 收集 MinGW runtime DLL
+      - name: Collect MinGW runtime DLLs
+        shell: powershell
+        run: |
+          Write-Host "Searching for MinGW runtime DLLs..."
+
+          $gxx = Get-Command g++.exe -ErrorAction Stop
+          $mingwBin = Split-Path $gxx.Source
+
+          Write-Host "MinGW bin directory:"
+          Write-Host $mingwBin
+
+          $dlls = @(
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll",
+            "libwinpthread-1.dll"
+          )
+
+          foreach ($dll in $dlls) {
+            $path = Join-Path $mingwBin $dll
+
+            if (Test-Path $path) {
+              Copy-Item $path release/ -Force
+              Write-Host "Copied $dll"
+            }
+            else {
+              Write-Host "WARNING: $dll was not found"
+            }
+          }
+
+      # 8. 检查所有 EXE 的依赖 DLL
+      - name: Check release files
+        shell: powershell
+        run: |
+          Write-Host "=== Release package ==="
+          Get-ChildItem release | Format-Table Name, Length
+
+          Write-Host ""
+          Write-Host "=== EXE files ==="
+          Get-ChildItem release/*.exe | ForEach-Object {
+            Write-Host $_.Name
+          }
+
+          Write-Host ""
+          Write-Host "=== DLL files ==="
+          Get-ChildItem release/*.dll | ForEach-Object {
+            Write-Host $_.Name
+          }
+
+      # 9. 创建 ZIP
+      - name: Create ZIP package
+        shell: powershell
+        run: |
+          Compress-Archive `
+            -Path release/* `
+            -DestinationPath CatSystem2-Tools-Windows-x64.zip `
+            -Force
+
+      # 10. 上传完整 ZIP
+      - name: Upload complete package
         uses: actions/upload-artifact@v4
         with:
-          name: catsystem2-hg3
-          path: build/release/catsystem2-hg3.exe
+          name: CatSystem2-Tools-Windows-x64
+          path: CatSystem2-Tools-Windows-x64.zip
+
+      # 11. 同时上传解压后的文件
+      - name: Upload release directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: CatSystem2-Tools-Files
+          path: release/
